@@ -17,15 +17,12 @@ limitations under the License.
 package sqlparser
 
 import (
-	"flag"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
 	"sync"
 
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -51,8 +48,9 @@ var MySQLVersion = "50709" // default version if nothing else is stated
 //
 // N.B: Parser pooling means that you CANNOT take references directly to parse stack variables (e.g.
 // $$ = &$4) in sql.y rules. You must instead add an intermediate reference like so:
-//    showCollationFilterOpt := $4
-//    $$ = &Show{Type: string($2), ShowCollationFilterOpt: &showCollationFilterOpt}
+//
+//	showCollationFilterOpt := $4
+//	$$ = &Show{Type: string($2), ShowCollationFilterOpt: &showCollationFilterOpt}
 func yyParsePooled(yylex yyLexer) int {
 	parser := parserPool.Get().(*yyParserImpl)
 	defer func() {
@@ -86,7 +84,6 @@ func Parse2(sql string) (Statement, BindVars, error) {
 			if typ, val := tokenizer.Scan(); typ != 0 {
 				return nil, nil, fmt.Errorf("extra characters encountered after end of DDL: '%s'", string(val))
 			}
-			log.Warningf("ignoring error parsing DDL '%s': %v", sql, tokenizer.LastError)
 			switch x := tokenizer.partialDDL.(type) {
 			case DBDDLStatement:
 				x.SetFullyParsed(false)
@@ -102,21 +99,6 @@ func Parse2(sql string) (Statement, BindVars, error) {
 		return nil, nil, ErrEmpty
 	}
 	return tokenizer.ParseTree, tokenizer.BindVars, nil
-}
-
-func checkParserVersionFlag() {
-	if flag.Parsed() {
-		versionFlagSync.Do(func() {
-			if *servenv.MySQLServerVersion != "" {
-				convVersion, err := convertMySQLVersionToCommentVersion(*servenv.MySQLServerVersion)
-				if err != nil {
-					log.Error(err)
-				} else {
-					MySQLVersion = convVersion
-				}
-			}
-		})
-	}
 }
 
 // convertMySQLVersionToCommentVersion converts the MySQL version into comment version format.
